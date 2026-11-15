@@ -1,7 +1,6 @@
 package LLM.llmtest;
 
 import LLM.OnnxGenAiPhiClient;
-
 import java.nio.file.Path;
 
 public class OnnxSmokeTest {
@@ -24,7 +23,7 @@ public class OnnxSmokeTest {
                     """;
 
             String result = client.generate(prompt);
-            System.out.println("MODEL RESPONSE:");
+            System.out.println("Кейн:");
             System.out.println(result);
         }
     }

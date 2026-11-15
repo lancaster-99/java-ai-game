@@ -36,6 +36,13 @@
             <version>${jme.version}</version>
         </dependency>
 
+        <!-- Загрузчики моделей: glTF (.glb/.gltf) из Blender и др. -->
+        <dependency>
+            <groupId>org.jmonkeyengine</groupId>
+            <artifactId>jme3-plugins</artifactId>
+            <version>${jme.version}</version>
+        </dependency>
+
         <!-- Обновлённый обычный ONNX Runtime -->
         <dependency>
             <groupId>com.microsoft.onnxruntime</groupId>

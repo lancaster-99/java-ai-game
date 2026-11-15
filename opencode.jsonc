@@ -1,0 +1,36 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // Автосжатие контекста: сессию можно вести долго, не создавая новую.
+  // buffer = сколько места держать свободным; при 20% сжатие начнётся на ~80% окна.
+  // keep.tokens = сколько последних токенов оставить "как есть" рядом со сводкой.
+  "compaction": {
+    "auto": true,
+    "keep": { "tokens": 24000 },
+    "buffer": "20%"
+  },
+
+  // Файлы постоянной памяти проекта. Подхватываются в каждом запросе.
+  // Сохранения лежат в opencode-local-setup, чтобы не мешать в корне.
+  "instructions": ["opencode-local-setup/AGENTS.md", "opencode-local-setup/PROJECT_MEMORY.md"],
+
+  "commands": {
+    "save-context": {
+      "description": "Обновить сохранение проекта",
+      "template": "Прочитай текущее состояние проекта и обнови opencode-local-setup/PROJECT_MEMORY.md: Objective, Done, Decisions, Current problems, Next moves, Risks. Не меняй код. Файл не создавай заново в корне, пиши именно в opencode-local-setup."
+    },
+    "resume": {
+      "description": "Продолжить работу после перерыва",
+      "template": "Прочитай opencode-local-setup/AGENTS.md и opencode-local-setup/PROJECT_MEMORY.md. Кратко скажи, что уже сделано, что дальше, и какие файлы открыть первыми."
+    }
+  },
+
+  "watcher": {
+    "ignore": [
+      "target/**",
+      "**/*.class",
+      "Phi-3.5-mini-instruct-onnx/**",
+      "jmonkeyengine-3.10.0-beta2/**"
+    ]
+  }
+}

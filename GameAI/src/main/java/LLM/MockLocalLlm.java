@@ -1,17 +1,17 @@
-package LLM;
+package LLM; // пакет клиентов локальной нейросети
 
-public class MockLocalLlm implements LocalLlmClient {
+public class MockLocalLlm implements LocalLlmClient { // заглушка: имитирует нейросеть, возвращая готовый JSON без модели
 
-    private volatile boolean ready = false;
+    private volatile boolean ready = false; // флаг готовности; volatile — читается из разных потоков
 
     @Override
-    public void load() {
-        ready = true;
-        System.out.println("[MockLLM] Model loaded");
+    public void load() { // "загрузка" модели — мгновенная
+        ready = true; // помечаем готовность
+        System.out.println("[MockLLM] Model loaded"); // логируем для отладки
     }
 
     @Override
-    public String generate(String prompt) {
+    public String generate(String prompt) { // "генерация": всегда возвращаем один и тот же валидный JSON режима
         return """
                 {
                   "schemaVersion": 1,
@@ -62,16 +62,16 @@ public class MockLocalLlm implements LocalLlmClient {
                   ],
                   "difficulty": 2
                 }
-                """;
+                """; // текстовый блок Java 21: JSON спецификации тестового режима
     }
 
     @Override
-    public boolean isReady() {
-        return ready;
+    public boolean isReady() { // сообщаем, готова ли "модель"
+        return ready; // просто возвращаем флаг
     }
 
     @Override
-    public void close() {
-        ready = false;
+    public void close() { // "освобождение" ресурсов
+        ready = false; // сбрасываем флаг готовности
     }
 }

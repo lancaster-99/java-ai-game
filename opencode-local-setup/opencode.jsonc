@@ -1,0 +1,39 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "compaction": {
+    "auto": true,
+    "keep": { "tokens": 24000 },
+    "buffer": "20%"
+  },
+
+  "experimental": {
+    "background_compaction": true
+  },
+
+  "instructions": [
+    "AGENTS.md",
+    "PROJECT_MEMORY.md",
+    "план.txt"
+  ],
+
+  "commands": {
+    "save-context": {
+      "description": "Update persistent project memory",
+      "template": "Прочитай текущее состояние проекта и обнови PROJECT_MEMORY.md: Objective, Done, Decisions, Next moves, Risks. Не меняй код."
+    },
+    "resume": {
+      "description": "Resume project after break",
+      "template": "Прочитай AGENTS.md, PROJECT_MEMORY.md и план.txt. Кратко скажи, что уже сделано, что дальше, и какие файлы нужно открыть первыми."
+    }
+  },
+
+  "watcher": {
+    "ignore": [
+      "target/**",
+      "**/*.class",
+      "Phi-3.5-mini-instruct-onnx/**",
+      "jmonkeyengine-3.10.0-beta2/**"
+    ]
+  }
+}

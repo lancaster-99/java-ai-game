@@ -1,0 +1,419 @@
+ПЛАН ПО ПРОЕКТУ GameAI
+Цель: научиться и в сжатые сроки сделать курсовой проект — Java-игру на jMonkeyEngine, где NPC через локальную Phi-3.5-mini генерирует игровые режимы по текстовому запросу.
+
+Важная рамка:
+- Нейросеть НЕ должна напрямую управлять сценой, физикой или памятью игры.
+- Нейросеть возвращает только строгий JSON-описание режима.
+- Игра валидирует JSON и строит уровень из заранее готовых шаблонов, префабов и правил.
+- Реального “real-time” почти не будет: правильный UX — запрос -> NPC думает -> короткая загрузка -> режим готов.
+
+============================================================
+0. С ЧЕГО НАЧАТЬ ПРЯМО СЕЙЧАС
+============================================================
+
+Сначала не учить всё подряд, а стабилизировать текущий каркас.
+
+Технические задачи нулевого этапа:
+1. Починить GameModeApplier:
+   - удалить кусок с MockLocalLlm name = null; name.generate(promt); это гарантированный NullPointerException.
+2. Привести OnnxGenAiPhiClient к интерфейсу LocalLlmClient:
+   - implements LocalLlmClient
+   - добавить isReady()
+   - оставить load() и generate() блокирующими, вызывать только из фонового потока.
+3. Уменьшить maxNewTokens с 10000 до 512–1024.
+4. Оставить temperature = 0 для генерации JSON.
+5. Сделать GameModeSpecValidator:
+   - пустой JSON {} не считается успехом;
+   - objective.type обязателен;
+   - координаты ограничены;
+   - count ограничен;
+   - строки ограничены по длине.
+6. Оставить MockLocalLlm как режим разработки; реальную Phi включать флагом или -Dphi.model.dir=...
+
+Обучающая цель нулевого этапа:
+- понять жизненный цикл jME-приложения: simpleInitApp(), update(), enqueue(), destroy();
+- понять, почему LLM нельзя вызывать в render-потоке;
+- понять разницу между “сырым текстом модели” и “валидированной моделью данных”.
+
+============================================================
+1. МИНИМУМ ПО JAVA, КОТОРЫЙ РЕАЛЬНО НУЖЕН
+============================================================
+
+Не пытайся выучить “всю Java”. Для проекта нужен конкретный минимум.
+
+Темы:
+1. База:
+   - классы, интерфейсы, наследование;
+   - коллекции List/Map/Set;
+   - исключения;
+   - generics на уровне “уметь читать”.
+2. Потоки:
+   - ExecutorService;
+   - CompletableFuture;
+   - volatile;
+   - почему UI/render-поток нельзя блокировать.
+3. JSON:
+   - Jackson ObjectMapper;
+   - валидация DTO;
+   - нормализация недоверенных данных.
+4. Maven:
+   - dependencies;
+   - properties;
+   - запуск main;
+   - сборка и запуск тестов.
+5. Git:
+   - commit, branch, status, diff;
+   - .gitignore;
+   - как не коммитить модель, target, .idea.
+
+Ресурсы:
+- University of Helsinki MOOC “Java Programming” — бесплатный, хороший для базы.
+- JetBrains Academy / Hyperskill “Java Developer” — если нужен практический трек.
+- Tim Buchalka, Udemy, “Java Programming Masterclass” — объёмный, но можно смотреть выборочно.
+- Herbert Schildt, “Java: A Beginner’s Guide” — как справочник для новичка.
+- “Effective Java” Джошуа Блоха — не сразу, после базы.
+- “Java Concurrency in Practice” — только главы про Executor/потокобезопасность, не целиком.
+
+Видео:
+- freeCodeCamp Java full course — для быстрого входа.
+- Bro Code Java — если нужен совсем простой вход.
+- Официальная документация Maven и Git — для команд, а не случайные ролики.
+
+Правило работы с ИИ:
+- Проси объяснить код построчно: “объясни как junior, что делает этот класс и где ошибка”.
+- Не принимай большие куски кода без вопросов.
+- После ответа ИИ всегда прогоняй: компиляция -> запуск -> лог -> тест.
+
+============================================================
+2. JMONKEYENGINE: ЧТО УЧИТЬ И В КАКОМ ПОРЯДКЕ
+============================================================
+
+Для твоей задачи не нужен весь движок. Нужен рабочий набор.
+
+Порядок изучения jME:
+1. HelloSimpleApplication / SimpleApplication:
+   - rootNode, assetManager, cam, flyCam, inputManager;
+   - update loop;
+   - enqueue для возврата в render-поток.
+2. Scene graph:
+   - Node, Geometry, Spatial;
+   - attachChild/detachChild;
+   - localTranslation/rotation/scale.
+3. Materials:
+   - Unshaded.j3md;
+   - Lighting.j3md;
+   - цвета, текстуры, прозрачность.
+4. Input:
+   - KeyTrigger, MouseButtonTrigger;
+   - ActionListener, AnalogListener;
+   - ввод текста для запроса NPC.
+5. Lighting и атмосфера:
+   - DirectionalLight, AmbientLight, PointLight;
+   - FogFilter или простая имитация тумана;
+   - небо/время суток на уровне визуальных пресетов.
+6. Physics:
+   - BulletAppState;
+   - RigidBodyControl;
+   - CharacterControl/BetterCharacterControl;
+   - collision groups;
+   - удаление физики при смене режима.
+7. UI/HUD:
+   - BitmapText;
+   - простые надписи: “NPC думает…”, “Ошибка”, “Режим готов”.
+8. Terrain и префабы:
+   - сначала простая арена из Box/Quad;
+   - потом TerrainQuad/TerrainLighting, если останется время.
+
+Ресурсы:
+- Официальная документация jMonkeyEngine — главный источник: wiki/tutorials/samples.
+- Примеры jme3-examples — смотреть как справочник по конкретной теме.
+- Ruth Kusterer, “jMonkeyEngine 3.0 Beginner’s Guide” — книга старая, но основы scene graph, input, materials, physics совпадают по смыслу; сверяй API с текущей версией.
+- “jMonkeyEngine 3.0 Cookbook” — как сборник рецептов; тоже старый, использовать выборочно.
+- jME forum/Hub — искать конкретные ошибки, а не учить всё подряд.
+
+Практический принцип:
+- Каждую тему учи через мини-пример в отдельной ветке или sandbox-классе.
+- Не тащи большой туториал целиком в курсовую.
+
+============================================================
+3. ЛОКАЛЬНАЯ LLM / PHI / ONNX: ЧТО НУЖНО ПОНЯТЬ
+============================================================
+
+Тебе не нужно стать специалистом по обучению моделей. Нужно стать инженером инференса.
+
+Темы:
+1. Что такое ONNX и ONNX Runtime:
+   - модель как граф вычислений;
+   - model.onnx + model.onnx.data;
+   - native DLL и зависимости.
+2. ONNX Runtime GenAI:
+   - Model, Tokenizer, Generator, GeneratorParams;
+   - greedy vs sampling;
+   - max_length/maxNewTokens;
+   - eos/stop tokens.
+3. Промпт-дизайн для структурированного вывода:
+   - system prompt;
+   - user prompt;
+   - few-shot примеры;
+   - запрет markdown;
+   - вывод только JSON.
+4. Надёжность:
+   - LLM галлюцинирует;
+   - любой ответ — недоверенный;
+   - нужен retry + validation + fallback.
+5. Производительность:
+   - замер load time;
+   - замер tokens/sec;
+   - RAM;
+   - влияние длины prompt/output на задержку.
+
+Ресурсы:
+- Официальные доки ONNX Runtime и ONNX Runtime GenAI — основной источник.
+- Model card Phi-3.5-mini — читать про назначение, ограничения, формат чата.
+- “Natural Language Processing with Transformers” — Tunstall/von Werra/Wolf, для понимания токенизации и LLM; не обязательно целиком.
+- DeepLearning.AI “ChatGPT Prompt Engineering for Developers” — коротко и полезно по промптам, хоть и про API.
+- DeepLearning.AI “Generative AI with Large Language Models” — для общей картины, выборочно.
+
+Важно:
+- Проверяй совместимость версий onnxruntime и onnxruntime-genai.
+- Для курсовой лучше deterministic JSON: temperature=0, жёсткая схема, retry.
+- Не обещай в пояснительной записке “мгновенную генерацию уровней”. Обещай: асинхронная генерация игрового режима по запросу с валидацией и fallback.
+
+============================================================
+4. АРХИТЕКТУРА ПРОЕКТА
+============================================================
+
+Текущее направление уже правильное: LLM -> JSON -> GameModeSpec -> Applier.
+
+Целевой pipeline:
+Игрок подошёл к NPC
+-> NpcInteractionController
+-> UI ввода запроса
+-> AsyncLlmService
+-> PromptFactory
+-> LocalLlmClient (Mock или Phi)
+-> GameModeGenerator
+-> raw text
+-> JsonExtractor
+-> Jackson -> GameModeSpec
+-> GameModeSpecValidator
+-> normalize()
+-> LevelBuilder/GameModeApplier
+-> ObjectiveController + RuleEngine + HUD
+
+Нужные пакеты/классы:
+- main/Main.java — запуск и сборка приложения.
+- llm/LocalLlmClient.java — интерфейс.
+- llm/MockLocalLlm.java — быстрая разработка без модели.
+- llm/OnnxGenAiPhiClient.java — реальная модель.
+- llm/PromptFactory.java — system/user/few-shot.
+- llm/JsonExtractor.java — извлечение JSON из ответа.
+- llm/GameModeSpecValidator.java — жёсткая валидация.
+- llm/AsyncLlmService.java — очередь, отмена, статус.
+- game/GameModeSpec.java — DTO.
+- game/LevelBuilder.java — построение мира.
+- game/WorldApplier.java — свет, туман, гравитация, погода.
+- game/SpawnFactory.java — enemy/item/checkpoint/trap/ball/goal/npc.
+- game/ObjectiveController.java — survive/collect/reach/defend/score.
+- game/RuleEngine.java — события и действия.
+- game/CleanupService.java — корректное удаление старого режима.
+- ui/HudController.java — статус генерации, ошибки, таймер, счёт.
+- ui/PromptInputController.java — ввод запроса.
+- npc/NpcInteractionController.java — радиус, клавиша E, реплики NPC.
+- test/... — unit-тесты для extractor/validator/normalizer.
+
+============================================================
+5. РАСШИРЕНИЕ РЕЖИМОВ
+============================================================
+
+Ты правильно сказал: режимы не только с врагами. Поэтому схему нужно проектировать шире, чем combat.
+
+Категории режимов:
+1. Combat:
+   - survival;
+   - waves;
+   - defend the point;
+   - boss-lite;
+   - arena clear.
+2. Sport:
+   - football;
+   - race/checkpoint race;
+   - target shooting;
+   - timed obstacle course.
+3. Adventure:
+   - small quest;
+   - collect artifacts;
+   - escort-lite;
+   - find the exit;
+   - treasure hunt.
+4. Puzzle:
+   - activate switches in order;
+   - push boxes to plates;
+   - memory sequence;
+   - maze-lite.
+5. Sandbox:
+   - изменить погоду/гравитацию/скорость;
+   - спавн объектов;
+   - “покажи мне закат с дождём”.
+
+Для схемы GameModeSpec добавь/подготовь поля:
+- modeCategory: combat|sport|adventure|puzzle|sandbox
+- objective.type: survive|collect|reach|defend|score|race|escort|solve
+- player: speed/jump/health
+- world: gravity, timeOfDay, weather, fogDensity, skyPreset, ambientColor, sunColor
+- entities/spawns: enemy|item|checkpoint|trap|ball|goal|npc|switch|door|vehicle
+- scoring: pointsPerItem, winScore, loseConditions
+- dialogue: npcIntro, npcSuccess, npcFail
+- feedback: soundPreset, particlePreset, cameraShake
+- limits: maxEntities, arenaRadius, seed
+
+Принцип:
+- LLM выбирает и параметризует шаблон.
+- Движок строит уровень детерминированно по seed + spec.
+
+============================================================
+6. ПЛАН ПО НЕДЕЛЯМ
+============================================================
+
+Неделя 0–1: стабилизация и база Java
+- Починить NPE, интерфейс клиента, путь модели.
+- Прогнать MockLocalLlm без падений.
+- Сделать 2–3 мок-режима.
+- Учить Java: коллекции, исключения, потоки, Jackson.
+- Результат: игра запускается, по клавишам 1/2 применяются разные мок-режимы без краша.
+
+Неделя 1–2: jME основа
+- Сцена: пол, свет, камера, управление.
+- NPC-объект, радиус взаимодействия, клавиша E.
+- HUD: статус модели/генерации.
+- Учить: SimpleApplication, input, Node/Geometry, materials.
+- Результат: игрок подходит к NPC, открывается ввод запроса, запрос уходит в mock pipeline.
+
+Неделя 2–3: JSON и валидация
+- Довести GameModeSpec до расширенной схемы.
+- Написать JsonExtractor + Validator + normalize.
+- Сделать таблицу тестов: валидный JSON, markdown, trailing comma, лишний текст, пустой JSON, битые числа.
+- Результат: любой ответ LLM либо становится безопасным spec, либо отклоняется с понятной ошибкой.
+
+Неделя 3–4: реальная Phi
+- Запустить OnnxSmokeTest отдельно.
+- Подключить OnnxGenAiPhiClient к игре флагом.
+- Замерить load time, generation time, RAM.
+- Настроить fallback: если модель не отвечает или JSON битый — безопасный режим.
+- Результат: NPC реально вызывает локальную Phi; игра не фризит; ошибки видны в HUD.
+
+Неделя 4–5: построение уровней
+- LevelBuilder: очистка старого уровня, арена, свет, погода, спавн сущностей.
+- Минимум 4 шаблона: arena survival, football field, checkpoint race, small adventure/collect.
+- Физика: границы арены, мяч, враги с простым движением.
+- Результат: по одному запросу строится играбельный мини-режим.
+
+Неделя 5–6: правила и цели
+- ObjectiveController: survive/collect/reach/defend/score/race.
+- RuleEngine: onPlayerDeath, onObjectiveComplete, onTimeExpired, onScoreChanged.
+- Win/Lose экран или HUD.
+- Результат: режим можно выиграть или проиграть; состояние сбрасывается.
+
+Неделя 6–7: качество и производительность
+- Кэширование удачных запросов.
+- Warm-up модели при старте.
+- Ограничение maxNewTokens и prompt size.
+- Логи: prompt, raw response, latency, validation errors.
+- Уборка физики/партиклов при смене режима.
+- Результат: 5–10 стабильных демо-запросов подряд без падения.
+
+Неделя 7–8: курсовая упаковка
+- Пояснительная записка: архитектура, схема JSON, метрики, troubleshooting DLL.
+- Демо-сценарий для защиты.
+- Скриншоты/видео.
+- Список ограничений: модель не гарантирует валидный JSON, генерация не мгновенная, уровни строятся из шаблонов.
+- Результат: проект можно показать и объяснить.
+
+============================================================
+7. КАК ИСПОЛЬЗОВАТЬ ИИ, ЧТОБЫ ИМЕННО НАУЧИТЬСЯ
+============================================================
+
+Разрешённые сценарии:
+- “Объясни ошибку компиляции и дай 3 гипотезы.”
+- “Покажи минимальный пример, потом объясни построчно.”
+- “Сделай ревью моего кода: найди риски, race condition, memory leak.”
+- “Составь тест-кейсы для JSON extractor.”
+- “Сравни два подхода: MCP vs встроенный клиент, для моей курсовой.”
+
+Запрещённые сценарии:
+- “Напиши весь проект”.
+- Вставка большого кода без запуска.
+- Копипаста чужой архитектуры без понимания.
+- Доверие к выводу LLM внутри игры без валидации.
+
+Ритуал после любой помощи ИИ:
+1. Прочитал и понял?
+2. Скомпилировал?
+3. Запустил?
+4. Проверил лог?
+5. Написал/обновил тест?
+6. Закоммитил маленьким понятным коммитом?
+
+============================================================
+8. РИСКИ И КАК ИХ ЗАКРЫТЬ
+============================================================
+
+Риск 1: Phi нестабильно возвращает JSON.
+Закрытие: strict schema, few-shot, temperature=0, retry, validator, fallback.
+
+Риск 2: Генерация долгая.
+Закрытие: loading UI, короткий prompt, maxNewTokens 512–1024, warm-up, кэш, заранее заготовленные варианты.
+
+Риск 3: Падения при смене режима.
+Закрытие: CleanupService, удаление physics controls перед detach, один режим за раз, запрет спама запросов.
+
+Риск 4: Слишком широкий scope.
+Закрытие: MVP = NPC + один combat режим + один peaceful режим football + один collect adventure. Остальное — расширения.
+
+Риск 5: DLL/ONNX Runtime проблемы на чужом компьютере.
+Закрытие: раздел troubleshooting, точные версии зависимостей, README по запуску, mock fallback.
+
+Риск 6: Красивые обещания в курсовой.
+Закрытие: формулировка “асинхронная генерация параметров игрового режима локальной LLM с валидацией и построением уровня из шаблонов”.
+
+============================================================
+9. КРИТЕРИИ ГОТОВНОСТИ
+============================================================
+
+MVP готов, если:
+- игра запускается;
+- NPC доступен для взаимодействия;
+- запрос игрока уходит в фоновый поток;
+- модель загружается один раз;
+- render-поток не блокируется;
+- ответ LLM превращается в GameModeSpec;
+- невалидный JSON отклоняется;
+- старый режим очищается;
+- минимум 3 режима играбельны: survival, football, collect adventure;
+- есть fallback при ошибке;
+- есть короткая документация по запуску.
+
+Хорошая защита, если дополнительно:
+- есть таблица метрик: load time, generation time, success rate;
+- показан один и тот же запрос с разными seed;
+- показан режим с врагами и мирный режим;
+- объяснено, почему LLM не управляет движком напрямую;
+- показан troubleshooting по DLL/версиям.
+
+============================================================
+10. ПЕРВЫЕ 10 КОНКРЕТНЫХ ДЕЙСТВИЙ
+============================================================
+
+1. Удалить NPE-код из GameModeApplier.
+2. Сделать OnnxGenAiPhiClient implements LocalLlmClient.
+3. Добавить isReady() в ONNX-клиент.
+4. В Main оставить MockLocalLlm дефолтом, Phi включать через system property.
+5. Уменьшить maxNewTokens до 512–1024.
+6. Написать GameModeSpecValidator.
+7. Сделать JsonExtractor отдельным классом и покрыть тестами.
+8. Добавить NPC + клавишу E + HUD статус.
+9. Реализовать один survival и один football шаблон.
+10. Замерить реальную Phi: время загрузки, время ответа, процент валидных JSON.
+
+Главное правило проекта:
+LLM придумывает сценарий. Java проверяет. jME строит. Игрок играет.
