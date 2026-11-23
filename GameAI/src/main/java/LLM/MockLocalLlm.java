@@ -3,10 +3,10 @@ package LLM; // пакет клиентов локальной нейросет�
 public class MockLocalLlm implements LocalLlmClient { // заглушка: имитирует нейросеть, возвращая готовый JSON без модели
 
     private volatile boolean ready = false; // флаг готовности; volatile — читается из разных потоков
-
     @Override
     public void load() { // "загрузка" модели — мгновенная
         ready = true; // помечаем готовность
+
         System.out.println("[MockLLM] Model loaded"); // логируем для отладки
     }
 

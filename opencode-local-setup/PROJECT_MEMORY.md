@@ -1,51 +1,67 @@
 # PROJECT_MEMORY.md
 
+Актуализировано: 23.11.2026. Подтверждённые результаты также фиксируются в `план-на-2-недели-по-5-часов.txt`.
+
 ## Objective
 
 Сделать курсовую GameAI: Java-игру на jMonkeyEngine, где NPC по запросу игрока вызывает локальную Phi-3.5-mini и получает JSON-описание игрового режима, а игра строит режим из шаблонов.
 
-## Done
+## Current state
 
-- Найден проект `GameAI`.
-- Есть `Main.java` с jME `SimpleApplication`.
-- Есть `LocalLlmClient`, `MockLocalLlm`, `OnnxGenAiPhiClient`.
-- Есть `GameModeSpec`, `GameModeGenerator`, `GameModeApplier`.
-- Есть локальная модель `Phi-3.5-mini-instruct-onnx`.
-- Создан долгосрочный `план.txt`.
-- Рабочая папка OpenCode перенесена в корень курсовой.
-- Развёрнута постоянная память: `opencode-local-setup/AGENTS.md`, `opencode.jsonc` (compaction + `/save-context`, `/resume`).
-- Сохранения проекта и AGENTS.md перенесены в `opencode-local-setup/`, чтобы не мешать в корне (пути прописаны в `instructions` в `opencode.jsonc`).
+Сейчас готов технический LLM-prototype, но ещё не игровой MVP.
+
+- Есть 9 основных Java-файлов: `Main`, два LLM-клиента и интерфейс, smoke-test, `GameModeSpec`, validator, generator и applier.
+- Mock и реальная Phi фактически запускались через `-Dgameai.llm=mock|onnx`.
+- `OnnxSmokeTest` фактически запускался; это ручной `main`, а не JUnit-тест.
+- Survival и collect прошли `parse -> validate -> normalize -> apply`: на сцене появились кубы `enemy`/`item`.
+- Режимы переключаются в одном запуске, предыдущие кубы удаляются через `modeNode.detachAllChildren()`.
+- Генерация и загрузка выполняются в однопоточном `llmExecutor`; сцена меняется через `enqueue()`.
+- Повторные нажатия во время генерации отклоняются; после завершения следующий запрос работает.
+- После двух намеренно неверных ответов Mock новый запрос успешно выполняется: `generating` сбрасывается. Временный тестовый код удалён.
+- Mock запускался, клавиши 1/2 применяли режим, приложение закрывалось без исключений.
+- `setPauseOnLostFocus(false)` добавлен; блокирующий Quick Edit консоли Windows отключён пользователем. Полный ответ и JSON сейчас снова выводятся в консоль.
+
+## Confirmed metrics
+
+Сохранены в `метрики.txt`:
+
+- загрузка модели: 4972 и 4610 мс;
+- первая генерация в двух запусках: 118787 и 131092 мс;
+- переключение 2 -> 1: 115824 мс;
+- переключение 1 -> 2: 131347 мс.
+
+`generationMs` включает возможный retry. Attempts, generatedTokens, tokens/sec, RAM, success rate и fallback rate ещё не измерены.
+
+## Important implementation details
+
+- `GameModeGenerator`: `MAX_ATTEMPTS = 2`; retry получает предыдущий ответ, конкретную ошибку и исходный запрос.
+- В `SYSTEM_PROMPT` есть полный валидный JSON-образец и список разрешённых значений.
+- `extractJson()` пока private внутри generator; отдельного `JsonExtractor` нет.
+- Пустое `description` разрешено validator и заполняется в `normalize()`; для `survive` допускается `targetCount=0`, для `collect` требуется минимум 1.
+- `GameModeApplier` фактически применяет только `spawns` и создаёт цветные кубы. `world`, `player`, `objective`, `rules` пока остаются данными без игровой механики.
+- `src/test` пуст; JUnit 5 и Surefire в `pom.xml` отсутствуют.
+- Файлов в `src/main/resources` сейчас нет. `jme3-plugins` подключён, но GLB не загружаются; визуальные модели отложены до механики.
+- Java 21.0.3 и локальный Maven 3.9.11 доступны. Maven лежит в `.tools/apache-maven-3.9.11`; `mvnw/mvnw.cmd` нет.
 
 ## Decisions
 
-- LLM генерирует только JSON-спеку режима.
-- Игра валидирует JSON и строит уровень из готовых шаблонов.
-- Режимы делятся на combat, sport, adventure, puzzle, sandbox.
-- Для MVP достаточно: survival, football, collect adventure.
-- MCP для локальной одиночной игры не обязателен; проще прямой встроенный клиент.
+- LLM генерирует только JSON-спеку режима и не управляет движком напрямую.
+- Для MVP достаточно survival, collect adventure и football; кубы допустимы до конца MVP.
+- MCP не используется: клиент встроен прямо в локальное приложение.
 - Долгую сессию не пересоздаём: включено автосжатие контекста (`compaction.auto`, `keep.tokens` 24000, `buffer` 20%).
-- `план.txt` не включён в `instructions`, чтобы не занимать контекст в каждом запросе; читается по необходимости.
+- Пользователь хочет учиться: по умолчанию ассистент объясняет причину и даёт шаги, а код правит пользователь. Ассистент меняет код только по явной просьбе «просто сделай».
+- После каждого подтверждённого результата обновлять план с журналом и эту память; не выдавать кубы за играбельные режимы.
 
-## Current problems
+## Current problems and next moves
 
-- Нужен fallback-режим (когда все 3 попытки генерации провалились).
-- В системе нет Maven (`mvn`/`mvnw`), но компиляция проверяется через `javac` с classpath из `~/.m2` (jme3-core 3.10.0-beta1, jackson 2.17.0, onnxruntime-genai 0.17.0).
+1. Вынести `JsonExtractor` без изменения алгоритма, подключить JUnit 5/Surefire и написать тесты extractor/validator/normalize/retry.
+2. Добавить `FallbackGameModeFactory` и fallback после исчерпания обеих попыток; отдельно обработать ошибку загрузки модели.
+3. Сделать игрока, NPC interaction, ввод произвольного запроса и HUD.
+4. Применять world/player/objective/rules и реализовать win/lose для survival и collect, затем football.
+5. Провести серию реальных запросов и собрать расширенные метрики.
+6. Добавить README и воспроизводимую сборку ближе к стабильному MVP.
 
-Решено 2026-11-08 (подробности в `ИЗМЕНЕНИЯ.txt` в корне курсовой):
-
-- В `GameModeSpec` добавлены `SUPPORTED_TIMES` и `SUPPORTED_WEATHERS` (без них валидатор не компилировался); `normalize()` использует эти константы.
-- `GameModeSpecValidator` подключён в `GameModeGenerator.generate()`: цепочка parse -> validate -> normalize -> apply, при ошибках валидации — retry с текстом ошибок (до 3 попыток).
-- `{}` от LLM теперь отсекается валидатором (проверено тестом).
-- NPE в `GameModeApplier`, `implements LocalLlmClient`, `isReady()`, `maxNewTokens=768` — уже были в порядке.
-- Подготовка к 3D-моделям из Blender: в pom добавлен `jme3-plugins` (glTF-лоадер), создана `src/main/resources/assets/Models/`, в `Main.initScene()` добавлены DirectionalLight + AmbientLight (иначе glTF с PBR-материалами чёрные). Следующий шаг по теме: в `GameModeApplier` маппить тип спавна → .glb-файл (белый список, clone(), fallback на кубики).
-- В корне курсовой лежит `книги-по-нейросетям.txt` — подборка книг (нейросети, Java/C#/C++, геймдев) по запросу пользователя.
-
-## Next moves
-
-1. Сделать NPC interaction + HUD.
-2. Добавить fallback-режим при провале всех попыток генерации.
-3. Подключить реальную Phi флагом `-Dgameai.llm=onnx` и проверить скорость генерации.
-4. Реализовать первый survival-режим и football-режим.
+Исторические подробности ранних исправлений находятся в `ИЗМЕНЕНИЯ.txt`; это журнал прошлых изменений, а не актуальный статус.
 
 ## Side task: Quartus lab11 (МИКРА, задание 3.1) — DONE 2026-11-08
 
@@ -79,7 +95,12 @@
 
 ```powershell
 cd "C:\Users\Arseniy\Desktop\Курсова Java\GameAI"
-mvn -q -DskipTests package
+mvn -DskipTests package
+mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dexec.mainClass=Main.Main -Dgameai.llm=mock
+mvn compile org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dexec.mainClass=Main.Main -Dgameai.llm=onnx
 ```
 
-Запуск реальной Phi должен включаться отдельным флагом/настройкой, а Mock остаётся режимом разработки.
+Если `mvn` недоступен в новом терминале, использовать полный путь:
+`& "C:\Users\Arseniy\Desktop\Курсова Java\.tools\apache-maven-3.9.11\bin\mvn.cmd" ...`.
+
+Запуск реальной Phi включается отдельным флагом, Mock остаётся режимом разработки.

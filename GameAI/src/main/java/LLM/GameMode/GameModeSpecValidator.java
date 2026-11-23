@@ -17,9 +17,7 @@ public class GameModeSpecValidator { // проверяет спецификац�
             errors.add("name пустое");
         }
 
-        if (spec.description == null || spec.description.isBlank()) { // описание обязательно; у пустого "{}" оно пустое — так отсеиваем "{}"
-            errors.add("description пустое");
-        }
+        // description необязательно: пустое значение безопасно заменяется в normalize().
 
         if (spec.world == null) { // секция мира обязательна
             errors.add("world == null");
@@ -52,7 +50,7 @@ public class GameModeSpecValidator { // проверяет спецификац�
             if (!GameModeSpec.SUPPORTED_OBJECTIVE_TYPES.contains(spec.objective.type)) { // тип цели строго из списка
                 errors.add("objective.type недопустим: " + spec.objective.type);
             }
-            if (spec.objective.targetCount < 1) { // целей должна быть хотя бы одна
+            if (spec.objective.targetCount < 1 && !"survive".equals(spec.objective.type)) { // для survive количество целей не используется
                 errors.add("objective.targetCount < 1");
             }
             if (spec.objective.timeLimitSec < 10) { // лимит времени не меньше 10 секунд

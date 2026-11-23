@@ -99,8 +99,8 @@ public class GameModeSpec { // строгая спецификация игро�
             name = "Generated Mode";
         }
 
-        if (description == null) { // описания нет — пустая строка
-            description = "";
+        if (description == null || description.isBlank()) { // описание необязательно: безопасно подставляем дефолт
+            description = "Автоматически сгенерированный игровой режим.";
         }
 
         if (world == null) { // секции мира нет — создаём с дефолтами

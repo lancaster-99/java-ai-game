@@ -42,7 +42,8 @@ public class Main extends SimpleApplication implements ActionListener { // гл�
 
     @Override
     public void simpleInitApp() {          // одноразовая инициализация (вызывает jME при старте)
-        setDisplayStatView(false);         // убираем статистику FPS из угла экрана
+        setPauseOnLostFocus(false);
+        setDisplayStatView(false);
 
         initScene();                       // строим базовую сцену (пол, камера)
 
@@ -93,17 +94,23 @@ public class Main extends SimpleApplication implements ActionListener { // гл�
         rootNode.addLight(ambient);                    // вешаем рассеянный свет на сцену
     }
 
-    private void loadModelAsync() { // загружает модель в фоновом потоке
-        CompletableFuture.runAsync(() -> { // выполняем в llmExecutor, не в render-потоке
+    private void loadModelAsync() {
+        CompletableFuture.runAsync(() -> {
+            long loadStarted = System.nanoTime();
+
             try {
-                localLlm.load();           // тяжёлая загрузка модели в память
-                modelReady = true;         // помечаем, что моделью можно пользоваться
+                localLlm.load();
+
+                long loadMs = (System.nanoTime() - loadStarted) / 1_000_000;
+
+                modelReady = true;
                 System.out.println("Модель готова к использованию.");
-            } catch (Exception e) {        // любая ошибка загрузки
+                System.out.println("[METRIC] loadMs=" + loadMs);
+            } catch (Exception e) {
                 System.err.println("Ошибка загрузки модели:");
-                e.printStackTrace();       // печатаем стектрейс в консоль
+                e.printStackTrace();
             }
-        }, llmExecutor); // выполнитель — наш отдельный поток
+        }, llmExecutor);
     }
 
     @Override
@@ -134,10 +141,17 @@ public class Main extends SimpleApplication implements ActionListener { // гл�
 
         generating = true; // ставим флаг "генерируем"
         System.out.println("Запрос к локальной нейросети: " + request); // логируем запрос
-
+        long generationStarted = System.nanoTime();
         CompletableFuture
                 .supplyAsync(() -> generator.generate(request), llmExecutor) // generate() — в фоновом потоке, НЕ в render-потоке
-                .whenComplete((spec, error) -> { // колбэк по завершении генерации
+                .whenComplete((spec, error) -> {
+                    long generationMs =
+                            (System.nanoTime() - generationStarted) / 1_000_000;
+
+                    System.out.println("[METRIC] generationMs=" + generationMs
+                            + ", success=" + (error == null)
+                            + ", request=" + request);
+
                     generating = false;          // снимаем флаг
 
                     if (error != null) {         // генерация упала с исключением
